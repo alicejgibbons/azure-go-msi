@@ -7,10 +7,13 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/keyvault/2016-10-01/keyvault"
+	"github.com/Azure/azure-sdk-for-go/profiles/latest/keyvault/keyvault"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
+	"github.com/jongio/azidext/go/azidext"
 )
 
 func main() {
@@ -24,7 +27,10 @@ func main() {
 		log.Fatal("KEYVAULT_SECRET_NAME must be set.")
 	}
 
-	clientID := os.Getenv("MSI_USER_ASSIGNED_CLIENTID")
+	clientID, ok := os.LookupEnv("MSI_USER_ASSIGNED_CLIENTID")
+	if !ok {
+		log.Fatal("MSI_USER_ASSIGNED_CLIENTID must be set.")
+	}
 
 	keyClient, err := NewKeyVaultClient(vaultName, clientID)
 	if err != nil {
@@ -47,13 +53,31 @@ type KeyVault struct {
 
 // NewKeyVaultClient creates a new keyvault client
 func NewKeyVaultClient(vaultName, clientID string) (*KeyVault, error) {
-	// Change this to change auth method. Add new auth methods to change how
-	// auth is setup
-	authorizer, err := getMSIAuthorizer(clientID)
+	// SDK v1
+	// authorizer, err := getMSIAuthorizer(clientID)
 	// authorizer, err := getAuthorizerFromEnv()
+
+	// instantiate a new ManagedIdentityCredential as specified in the example
+	cred, err := azidentity.NewManagedIdentityCredential(clientID, nil)
+
 	if err != nil {
-		return nil, err
+		fmt.Printf("Error: %v", err)
 	}
+
+	fmt.Printf("Got MI Creds")
+	// call azidext.NewAzureIdentityCredentialAdapter with the azidentity credential and necessary scope
+	// NOTE: Scopes define the set of resources and permissions that the credential will have assigned to it.
+	// To read more about scopes, see: https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-permissions-and-consent
+	authorizer := azidext.NewAzureIdentityCredentialAdapter(
+		cred,
+		azcore.AuthenticationPolicyOptions{
+			Options: azcore.TokenRequestOptions{
+				Scopes: []string{"https://vault.azure.net"}}}) // Keyvault scope
+
+	if err != nil {
+		fmt.Printf("Error: %v", err)
+	}
+	fmt.Printf("Got KeyVault Authorizer")
 
 	keyClient := keyvault.New()
 	keyClient.Authorizer = authorizer
@@ -66,6 +90,7 @@ func NewKeyVaultClient(vaultName, clientID string) (*KeyVault, error) {
 	return k, nil
 }
 
+// SDK v1
 func getMSIAuthorizer(clientID string) (autorest.Authorizer, error) {
 	msiKeyConfig := &auth.MSIConfig{
 		Resource: strings.TrimSuffix(azure.PublicCloud.KeyVaultEndpoint, "/"),
@@ -75,6 +100,7 @@ func getMSIAuthorizer(clientID string) (autorest.Authorizer, error) {
 	return msiKeyConfig.Authorizer()
 }
 
+// SDK v1
 func getAuthorizerFromEnv() (autorest.Authorizer, error) {
 	return auth.NewAuthorizerFromEnvironment()
 }

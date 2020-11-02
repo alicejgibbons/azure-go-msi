@@ -16,33 +16,30 @@ Make sure that this is a publicly accessible container image so that it can be p
 The Terraform requires 2 inputs, a name for the deployment, and the docker image that is in dockerhub. To run the Terraform do the following:
 ```
 terraform init
-terraform play --var "name=<name to use>" --var "docker_image=<docker image in dockerhub>"
+terraform plan --var "name=<name to use>" --var "docker_image=<docker image in dockerhub>"
 terraform apply --var "name=<name to use>" --var "docker_image=<docker image in dockerhub>"
 ```
 
 Once this has been created then check the Web App logs and the Container Instance logs to see if they were able to retreive the secret. This can be done using the portal by navigating to the resource group created by the Terraform.
 
-# Go Application
-The Go app can use 2 possible methods for using the MSI to get the KV secret.
+# Go Application: Updates
+The Go app uses the new ManagedIdentityCredential method to retrieve the azidentity credential and then the AzureIdentityCredentialAdapter to assign the credential to convert it to an authorizer that is compatible with the Azure SDK for Go V1 implementation.
 
-Method 1:
-```
-msiKeyConfig := &auth.MSIConfig{
-		Resource: strings.TrimSuffix(azure.PublicCloud.KeyVaultEndpoint, "/"),
-		ClientID: clientID,
-	}
+Note by default, the NewManagedIdentityCredential method will look for an environment variable named AZURE_CLIENT_ID if one is not set. See the implementation here: https://github.com/Azure/azure-sdk-for-go/blob/master/sdk/azidentity/managed_identity_credential.go#L57
 
-authorizer, err := msiKeyConfig.Authorizer()
 ```
+cred, err := azidentity.NewManagedIdentityCredential(clientID, nil)
 
-Method 2:
-```
-authorizer, err := auth.NewAuthorizerFromEnvironment()
+authorizer := azidext.NewAzureIdentityCredentialAdapter(
+		cred,
+		azcore.AuthenticationPolicyOptions{
+			Options: azcore.TokenRequestOptions{
+				Scopes: []string{"https://vault.azure.net"}}}) // Keyvault scope
+
 ```
 
-The authorizer method can be changed in the `NewKeyVaultClient` method by changing which authorizer method to use, either `getMSIAuthorizer` or `getAuthorizerFromEnv`.
+For more information, look at a similar example here: https://github.com/Azure/azure-sdk-for-go/blob/master/sdk/samples/azidentity/SDKV1Adapter/example_SDKV1_test.go#L77
 
-When testing a new auth method the docker container must be rebuilt and pushed with a new version and then that version must be deployed to Azure using the Terraform and the "docker_image" variable.
 
 # New Version
 ```

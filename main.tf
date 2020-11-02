@@ -93,7 +93,7 @@ resource "azurerm_app_service" "default" {
     "WEBSITES_PORT"                       = "8080"
     "KEYVAULT_VAULT_NAME"                 = "${azurerm_key_vault.default.name}"
     "KEYVAULT_SECRET_NAME"                = "${azurerm_key_vault_secret.example.name}"
-    "MSI_USER_ASSIGNED_IDENTITY_CLIENTID" = "${azurerm_user_assigned_identity.default.client_id}"
+    "MSI_USER_ASSIGNED_CLIENTID" = "${azurerm_user_assigned_identity.default.client_id}"
   }
   auth_settings {
     enabled          = false
@@ -124,7 +124,7 @@ resource "azurerm_container_group" "example" {
     environment_variables = {
         "KEYVAULT_VAULT_NAME"                 = "${azurerm_key_vault.default.name}"
         "KEYVAULT_SECRET_NAME"                = "${azurerm_key_vault_secret.example.name}"
-        "MSI_USER_ASSIGNED_IDENTITY_CLIENTID" = "${azurerm_user_assigned_identity.default.client_id}"
+        "MSI_USER_ASSIGNED_CLIENTID" = "${azurerm_user_assigned_identity.default.client_id}"
 
     }
   }
